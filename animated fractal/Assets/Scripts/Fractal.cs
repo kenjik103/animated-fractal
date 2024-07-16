@@ -1,12 +1,10 @@
-using System;
-using Unity.VisualScripting;
 using UnityEngine;
-using UnityEngine.Animations;
-using UnityEngine.UIElements;
 
 public class Fractal : MonoBehaviour
 {
     [SerializeField, Range(1,8)]  int depth = 4;
+    [SerializeField] Mesh mesh;
+    [SerializeField] Material material;
 
     readonly Vector3[] directions = { Vector3.up, Vector3.right, Vector3.left, Vector3.forward, Vector3.back};
     Quaternion[] rotations = { 
@@ -27,16 +25,14 @@ public class Fractal : MonoBehaviour
 
     ComputeBuffer[] matricesBuffer;
 
-    void OnValidate() {
-        if (parts != null && enabled) {
-            OnEnable();
-            OnDisable();
-        }
-    }
+    static readonly int matriciesId = Shader.PropertyToID("_Matrices");
+
+    static MaterialPropertyBlock propertyBlock;
 
     void OnEnable() {
         parts = new FractalPart[depth][];
         matrices = new Matrix4x4[depth][];
+        matricesBuffer = new ComputeBuffer[depth];
         int stride = 16 * 4;
         for (int i = 0, length = 1; i < parts.Length; i++, length *= 5) {
             parts[i] = new FractalPart[length];
@@ -53,6 +49,8 @@ public class Fractal : MonoBehaviour
                 }
             }
         }
+
+        propertyBlock ??= new MaterialPropertyBlock();
     }
 
     void OnDisable() {
@@ -68,18 +66,27 @@ public class Fractal : MonoBehaviour
         direction = directions[childIndex],
         rotation = rotations[childIndex],
     };
+    
+    void OnValidate() {
+        if (parts != null && enabled) {
+            OnEnable();
+            OnDisable();
+        }
+    }
 
-    float scale = 1f;
     void Update() {
-        scale *= 0.5f;
         float spinDelta = 22.5f * Time.deltaTime;
         FractalPart rootPart = parts[0][0];
         rootPart.spinAngle += spinDelta;
-        rootPart.worldRotation = rootPart.rotation *= Quaternion.Euler(0f, rootPart.spinAngle, 0f);
+        rootPart.worldRotation = transform.rotation * (rootPart.rotation * Quaternion.Euler(0f, rootPart.spinAngle, 0f));
+        rootPart.worldPosition = transform.position;
         parts[0][0] = rootPart;
-        matrices[0][0] = Matrix4x4.TRS(rootPart.worldPosition, rootPart.worldRotation, Vector3.one);
+        float objectScale = transform.lossyScale.x;
+        matrices[0][0] = Matrix4x4.TRS(rootPart.worldPosition, rootPart.worldRotation, objectScale* Vector3.one);
         
+        float scale = objectScale;
         for (int li = 1; li < parts.Length; li++) {
+            scale *= 0.5f;
             FractalPart[] parentParts = parts[li - 1];
             FractalPart[] levelParts = parts[li];
             Matrix4x4[] levelMatrices = matrices[li];
@@ -87,7 +94,7 @@ public class Fractal : MonoBehaviour
                 FractalPart parent = parentParts[fpi / 5];
                 FractalPart part = levelParts[fpi];
                 part.spinAngle += spinDelta;
-                part.worldRotation = parent.worldRotation * Quaternion.Euler(0f, spinDelta, 0f);
+                part.worldRotation = parent.worldRotation * part.rotation * Quaternion.Euler(0f, part.spinAngle, 0f);
                 part.worldPosition = 
                     parent.worldPosition + 
                     parent.worldRotation * 
@@ -97,8 +104,12 @@ public class Fractal : MonoBehaviour
             }
         }
 
+        Bounds bounds = new Bounds(Vector3.zero, 3f * Vector3.one);
         for (int i = 0; i < matricesBuffer.Length; i++) {
-            matricesBuffer[i].SetData(matrices[i]);
+            ComputeBuffer buffer = matricesBuffer[i];
+            buffer.SetData(matrices[i]);
+            propertyBlock.SetBuffer(matriciesId, buffer);
+            Graphics.DrawMeshInstancedProcedural(mesh, 0, material, bounds, buffer.count, propertyBlock);
         }
     }
 }
