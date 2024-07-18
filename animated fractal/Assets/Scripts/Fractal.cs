@@ -2,14 +2,14 @@ using UnityEngine;
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Jobs;
-using Unity.Jobs.LowLevel.Unsafe;
 
 public class Fractal : MonoBehaviour
 {
     [SerializeField, Range(1,8)]  int depth = 4;
     [SerializeField] Mesh mesh;
     [SerializeField] Material material;
-
+    
+    [BurstCompile(CompileSynchronously = true)] 
     struct UpdateFractalLevelJob : IJobFor
     {
         public float spinAngleDelta;
@@ -41,7 +41,7 @@ public class Fractal : MonoBehaviour
         Quaternion.Euler(0f, 0f, -90f), Quaternion.Euler(0f, 0f, 90f),
         Quaternion.Euler(90f, 0f, 0f), Quaternion.Euler(-90f, 0f, 0f)
     };
-
+    
     struct FractalPart
     {
         public Vector3 direction, worldPosition;
