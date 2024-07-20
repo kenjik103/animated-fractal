@@ -10,7 +10,7 @@ using quaternion = Unity.Mathematics.quaternion;
 
 public class Fractal : MonoBehaviour
 {
-    [SerializeField, Range(1, 8)] int depth = 4;
+    [SerializeField, Range(1, 10)] int depth = 4;
     [SerializeField] Mesh mesh;
     [SerializeField] Material material;
     
@@ -136,7 +136,7 @@ public class Fractal : MonoBehaviour
                 parts = parts[li],
                 parents = parts[li-1],
                 matrices = matrices[li]
-            }.Schedule(parts[li].Length, handle);
+            }.ScheduleParallel(parts[li].Length,  5,handle);
         }
         handle.Complete();
 
